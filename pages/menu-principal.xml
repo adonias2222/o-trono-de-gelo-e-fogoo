@@ -1,3 +1,0 @@
-<page id="menu-principal" bg_color="black">
-  <agent id="titulo" x="center" y="center" text="Página menu-principal" color="white" font-size="24" />
-</page>
