@@ -1,19 +1,122 @@
-<page id="ending" bg_image="tech-bg-lab.png" bg_music="osts-vilo.mp3">
-  <agent
-    id="teste"
-    text="Hello World Ending"
-    color="white"
-    x="center"
-    y="center"
-    font-size="70"
-  />
+<fabula titulo="O Trono de Gelo e Fogo">
+  <personagem nome="Jon Snow" tipo="humano" personalidade="honrado" />
+  <personagem nome="Daenerys Targaryen" tipo="humano" personalidade="ambiciosa" />
+  <personagem nome="Tyrion Lannister" tipo="humano" personalidade="estrategista" />
+  <personagem nome="Rei da Noite" tipo="criatura" personalidade="misteriosa" />
 
-  <agent
-    id="next_page_text"
-    text="Primeira Pagina"
-    animation="glitch"
-    y="480"
-    x="640"
-    on_click="goToPage('start')"
-  />
-</page>
+  <cenario nome="Winterfell" descricao="A fortaleza ancestral do Norte, fria e resistente." />
+  <cenario nome="Porto Real" descricao="A capital dos Sete Reinos, cheia de intrigas e segredos." />
+  <cenario nome="Além da Muralha" descricao="Terras congeladas e perigosas, onde a morte espreita." />
+
+  <inicio>
+    Após a batalha contra os mortos-vivos, Jon Snow se vê dividido entre lealdade ao Norte e a promessa de Daenerys.
+    <escolha>
+      <opcao destino="apoiar_daenerys">Apoiar Daenerys na conquista do Trono de Ferro</opcao>
+      <opcao destino="proteger_o_norte">Voltar para Winterfell e proteger o Norte</opcao>
+    </escolha>
+  </inicio>
+
+  <apoiar_daenerys>
+    Jon jura fidelidade a Daenerys. Eles marcham juntos rumo a Porto Real. Tyrion alerta Jon sobre o temperamento explosivo da rainha.
+    <escolha>
+      <opcao destino="confiar_em_daenerys">Confiar plenamente em Daenerys</opcao>
+      <opcao destino="ouvir_tyrion">Ouvir os conselhos de Tyrion e observar Daenerys com cautela</opcao>
+    </escolha>
+  </apoiar_daenerys>
+
+  <proteger_o_norte>
+    Jon retorna a Winterfell. Lá, um corvo chega com más notícias: o Rei da Noite não foi destruído totalmente.
+    <escolha>
+      <opcao destino="ir_alem_da_muralha">Reunir um exército e ir além da Muralha</opcao>
+      <opcao destino="pedir_ajuda_daenerys">Enviar um mensageiro pedindo ajuda a Daenerys</opcao>
+    </escolha>
+  </proteger_o_norte>
+
+  <confiar_em_daenerys>
+    Daenerys ataca Porto Real com fogo e destruição. Milhares de inocentes morrem. Jon assiste horrorizado.
+    <escolha>
+      <opcao destino="enfrentar_daenerys">Confrontar Daenerys sobre sua brutalidade</opcao>
+      <opcao destino="seguir_ao_lado_dela">Aceitar que a vitória exige sacrifícios e continuar ao lado dela</opcao>
+    </escolha>
+  </confiar_em_daenerys>
+
+  <ouvir_tyrion>
+    Jon começa a planejar secretamente uma forma de impedir Daenerys. Ele encontra provas de que é o verdadeiro herdeiro do trono.
+    <escolha>
+      <opcao destino="revelar_verdade">Revelar a verdade para os Sete Reinos</opcao>
+      <opcao destino="assassinar_daenerys">Assassinar Daenerys antes que ela se torne uma tirana definitiva</opcao>
+    </escolha>
+  </ouvir_tyrion>
+
+  <ir_alem_da_muralha>
+    Jon parte com uma pequena tropa. Ao norte da Muralha, ele descobre que o Rei da Noite está se reerguendo usando magia antiga.
+    <escolha>
+      <opcao destino="sacrificio_final">Enfrentar o Rei da Noite sozinho para dar tempo à tropa de fugir</opcao>
+      <opcao destino="retirar_e_alertar">Recuar e alertar os reinos sobre a ameaça</opcao>
+    </escolha>
+  </ir_alem_da_muralha>
+
+  <pedir_ajuda_daenerys>
+    Daenerys aceita ajudar, mas impõe uma condição: que Jon jure fidelidade eterna a ela. O Norte não ficará mais independente.
+    <escolha>
+      <opcao destino="aceitar_ajuda">Aceitar a condição e receber os dragões</opcao>
+      <opcao destino="recusar_e_enfrentar_sozinho">Recusar e lutar sem ela</opcao>
+    </escolha>
+  </pedir_ajuda_daenerys>
+
+  <enfrentar_daenerys>
+    Daenerys vê Jon como traidor. Drogon queima Tyrion. Jon é preso.
+    <final tipo="tragico">
+      Jon é executado. Daenerys reina sozinha como tirana. O fogo reina sobre o gelo.
+    </final>
+  </enfrentar_daenerys>
+
+  <seguir_ao_lado_dela>
+    Jon ajuda Daenerys a consolidar o trono. Mas a população se revolta, iniciando uma nova guerra civil.
+    <final tipo="neutro">
+      A paz nunca vem. O Trono de Ferro continua amaldiçoado.
+    </final>
+  </seguir_ao_lado_dela>
+
+  <revelar_verdade>
+    Jon proclama sua linhagem. Os lordes se dividem. Uma guerra entre os partidários de Jon e Daenerys começa.
+    <final tipo="epico">
+      Jon vence após muito sangue. Ele destrói o Trono e estabelece um conselho. A democracia nasce em Westeros.
+    </final>
+  </revelar_verdade>
+
+  <assassinar_daenerys>
+    Jon entra silenciosamente nos aposentos de Daenerys. Ele a mata com tristeza.
+    <final tipo="moral">
+      Às vezes, a maior prova de amor é impedir a destruição. Jon parte para o Norte e nunca mais é visto.
+    </final>
+  </assassinar_daenerys>
+
+  <sacrificio_final>
+    Jon enfrenta o Rei da Noite sozinho e morre heroicamente. Sua coragem permite que seus homens fujam e alertem Westeros.
+    <final tipo="heroico">
+      Jon torna-se lenda. A nova geração se une contra a ameaça dos mortos.
+    </final>
+  </sacrificio_final>
+
+  <retirar_e_alertar>
+    O Rei da Noite ataca mais rápido que o esperado. Winterfell cai. Sem Jon para liderar, o Norte é devastado.
+    <final tipo="tragico">
+      O inverno vence. A escuridão reina novamente.
+    </final>
+  </retirar_e_alertar>
+
+  <aceitar_ajuda>
+    Com os dragões de Daenerys, Jon derrota o Rei da Noite. Mas o preço foi a liberdade do Norte.
+    <final tipo="amargo">
+      A ameaça foi vencida, mas a submissão política dividiu os corações do povo.
+    </final>
+  </aceitar_ajuda>
+
+  <recusar_e_enfrentar_sozinho>
+    Jon luta bravamente, mas sem os dragões, a vitória é impossível.
+    <final tipo="derrota">
+      O Norte cai. Daenerys chega tarde demais, e tudo está perdido.
+    </final>
+  </recusar_e_enfrentar_sozinho>
+</fabula>
