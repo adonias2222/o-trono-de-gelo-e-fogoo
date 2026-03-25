@@ -1,0 +1,1010 @@
+$ProjectName = "usb_pc_net"
+$ProjectPath = Join-Path (Get-Location) $ProjectName
+
+Write-Host "==> Verificando Flutter..."
+flutter --version
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Flutter nao encontrado no PATH." -ForegroundColor Red
+    exit 1
+}
+
+if (Test-Path $ProjectPath) {
+    Write-Host "A pasta '$ProjectName' ja existe." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "==> Criando projeto Flutter..."
+flutter create $ProjectName
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Erro ao criar projeto Flutter." -ForegroundColor Red
+    exit 1
+}
+
+Set-Location $ProjectPath
+
+Write-Host "==> Gravando pubspec.yaml..."
+@'
+name: usb_pc_net
+description: App de conexao PC para celular com visual moderno
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+'@ | Set-Content pubspec.yaml -Encoding UTF8
+
+Write-Host "==> Criando lib/main.dart..."
+@'
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const UsbPcNetApp());
+}
+
+class UsbPcNetApp extends StatelessWidget {
+  const UsbPcNetApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'USB PC Net',
+      debugShowCheckedModeBanner: false,
+      themeMode: ThemeMode.dark,
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF6EA8FE),
+          secondary: Color(0xFF7C5CFF),
+          surface: Color(0xFF111827),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF090E18),
+      ),
+      home: const HomePage(),
+    );
+  }
+}
+
+enum TunnelMode { auto, tcp, udp }
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool connected = false;
+  bool usbDetected = true;
+  TunnelMode mode = TunnelMode.auto;
+
+  double downloadMbps = 0.00;
+  double uploadMbps = 0.00;
+  int pingMs = 0;
+  int sessionSeconds = 0;
+
+  Timer? timer;
+  final random = Random();
+
+  final List<String> logs = [
+    'App iniciado com sucesso.',
+    'Aguardando conexao USB...',
+  ];
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  void startConnection() {
+    setState(() {
+      connected = true;
+      sessionSeconds = 0;
+      logs.insert(0, '[OK] Conexao iniciada.');
+      logs.insert(0, '[INFO] Modo selecionado: ${modeLabel(mode)}');
+    });
+
+    timer?.cancel();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        sessionSeconds++;
+        downloadMbps = 30 + random.nextDouble() * 120;
+        uploadMbps = 8 + random.nextDouble() * 40;
+        pingMs = 8 + random.nextInt(35);
+
+        if (sessionSeconds % 5 == 0) {
+          logs.insert(
+            0,
+            '[SYNC] Down ${downloadMbps.toStringAsFixed(1)} Mbps | Up ${uploadMbps.toStringAsFixed(1)} Mbps | Ping ${pingMs} ms',
+          );
+        }
+
+        if (logs.length > 18) {
+          logs.removeLast();
+        }
+      });
+    });
+  }
+
+  void stopConnection() {
+    timer?.cancel();
+    setState(() {
+      connected = false;
+      downloadMbps = 0;
+      uploadMbps = 0;
+      pingMs = 0;
+      logs.insert(0, '[STOP] Conexao encerrada.');
+      if (logs.length > 18) {
+        logs.removeLast();
+      }
+    });
+  }
+
+  String modeLabel(TunnelMode value) {
+    switch (value) {
+      case TunnelMode.auto:
+        return 'AUTO';
+      case TunnelMode.tcp:
+        return 'TCP';
+      case TunnelMode.udp:
+        return 'UDP';
+    }
+  }
+
+  String formatDuration(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    final s = seconds % 60;
+    return '${h.toString().padLeft(2, '0')}:'
+        '${m.toString().padLeft(2, '0')}:'
+        '${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          const _BackgroundGlow(),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final desktop = constraints.maxWidth > 900;
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _TopHeader(
+                            connected: connected,
+                            usbDetected: usbDetected,
+                          ),
+                          const SizedBox(height: 20),
+                          desktop
+                              ? Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 7,
+                                      child: Column(
+                                        children: [
+                                          _HeroPanel(
+                                            connected: connected,
+                                            mode: modeLabel(mode),
+                                            uptime: formatDuration(sessionSeconds),
+                                            onConnect: startConnection,
+                                            onDisconnect: stopConnection,
+                                          ),
+                                          const SizedBox(height: 20),
+                                          _StatsGrid(
+                                            downloadMbps: downloadMbps,
+                                            uploadMbps: uploadMbps,
+                                            pingMs: pingMs,
+                                            connected: connected,
+                                          ),
+                                          const SizedBox(height: 20),
+                                          _ModeSelector(
+                                            value: mode,
+                                            onChanged: (v) {
+                                              if (v == null) return;
+                                              setState(() {
+                                                mode = v;
+                                                logs.insert(
+                                                  0,
+                                                  '[MODE] Alterado para ${modeLabel(v)}',
+                                                );
+                                                if (logs.length > 18) {
+                                                  logs.removeLast();
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    Expanded(
+                                      flex: 5,
+                                      child: _LogPanel(logs: logs),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    _HeroPanel(
+                                      connected: connected,
+                                      mode: modeLabel(mode),
+                                      uptime: formatDuration(sessionSeconds),
+                                      onConnect: startConnection,
+                                      onDisconnect: stopConnection,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    _StatsGrid(
+                                      downloadMbps: downloadMbps,
+                                      uploadMbps: uploadMbps,
+                                      pingMs: pingMs,
+                                      connected: connected,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    _ModeSelector(
+                                      value: mode,
+                                      onChanged: (v) {
+                                        if (v == null) return;
+                                        setState(() {
+                                          mode = v;
+                                          logs.insert(
+                                            0,
+                                            '[MODE] Alterado para ${modeLabel(v)}',
+                                          );
+                                          if (logs.length > 18) {
+                                            logs.removeLast();
+                                          }
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(height: 20),
+                                    _LogPanel(logs: logs),
+                                  ],
+                                ),
+                          const SizedBox(height: 20),
+                          _FooterHint(width: width),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopHeader extends StatelessWidget {
+  final bool connected;
+  final bool usbDetected;
+
+  const _TopHeader({
+    required this.connected,
+    required this.usbDetected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF6EA8FE), Color(0xFF7C5CFF)],
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x447C5CFF),
+                blurRadius: 24,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Icon(Icons.usb_rounded, color: Colors.white, size: 28),
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'USB PC Net',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Conexao de internet do PC para o celular com foco em estabilidade e baixa latencia',
+                style: TextStyle(
+                  color: Color(0xFF9CA3AF),
+                  fontSize: 13.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        _StatusChip(
+          icon: usbDetected ? Icons.cable_rounded : Icons.usb_off_rounded,
+          label: usbDetected ? 'USB detectado' : 'Sem USB',
+          color: usbDetected ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
+        ),
+        const SizedBox(width: 10),
+        _StatusChip(
+          icon: connected ? Icons.shield_rounded : Icons.pause_circle_rounded,
+          label: connected ? 'Conectado' : 'Parado',
+          color: connected ? const Color(0xFF3B82F6) : const Color(0xFFF59E0B),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroPanel extends StatelessWidget {
+  final bool connected;
+  final String mode;
+  final String uptime;
+  final VoidCallback onConnect;
+  final VoidCallback onDisconnect;
+
+  const _HeroPanel({
+    required this.connected,
+    required this.mode,
+    required this.uptime,
+    required this.onConnect,
+    required this.onDisconnect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Painel principal',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Controle a sessao, acompanhe o status da conexao e monitore o desempenho em tempo real.',
+            style: TextStyle(
+              color: Color(0xFF9CA3AF),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _MiniInfoTile(
+                icon: Icons.memory_rounded,
+                title: 'Modo',
+                value: mode,
+              ),
+              _MiniInfoTile(
+                icon: Icons.schedule_rounded,
+                title: 'Sessao',
+                value: uptime,
+              ),
+              _MiniInfoTile(
+                icon: Icons.videogame_asset_rounded,
+                title: 'Perfil',
+                value: 'Baixa latencia',
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 14,
+            runSpacing: 14,
+            children: [
+              SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: connected ? null : onConnect,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text(
+                    'Conectar',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: connected ? onDisconnect : null,
+                  icon: const Icon(Icons.stop_circle_rounded),
+                  label: const Text(
+                    'Desconectar',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Color(0xFF334155)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatsGrid extends StatelessWidget {
+  final double downloadMbps;
+  final double uploadMbps;
+  final int pingMs;
+  final bool connected;
+
+  const _StatsGrid({
+    required this.downloadMbps,
+    required this.uploadMbps,
+    required this.pingMs,
+    required this.connected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: [
+        _StatCard(
+          title: 'Download',
+          value: connected ? '${downloadMbps.toStringAsFixed(1)} Mbps' : '0.0 Mbps',
+          subtitle: 'Velocidade recebida do PC',
+          icon: Icons.south_rounded,
+        ),
+        _StatCard(
+          title: 'Upload',
+          value: connected ? '${uploadMbps.toStringAsFixed(1)} Mbps' : '0.0 Mbps',
+          subtitle: 'Velocidade enviada pelo celular',
+          icon: Icons.north_rounded,
+        ),
+        _StatCard(
+          title: 'Latencia',
+          value: connected ? '$pingMs ms' : '--',
+          subtitle: 'Indicador para jogos e trafego sensivel',
+          icon: Icons.speed_rounded,
+        ),
+      ],
+    );
+  }
+}
+
+class _ModeSelector extends StatelessWidget {
+  final TunnelMode value;
+  final ValueChanged<TunnelMode?> onChanged;
+
+  const _ModeSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Modo de tunel',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Escolha o comportamento da conexao. AUTO para equilibrio, TCP para compatibilidade, UDP para menor atraso.',
+            style: TextStyle(
+              color: Color(0xFF9CA3AF),
+              fontSize: 13.5,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _ModeButton(
+                selected: value == TunnelMode.auto,
+                title: 'AUTO',
+                subtitle: 'Equilibrado',
+                icon: Icons.auto_awesome_rounded,
+                onTap: () => onChanged(TunnelMode.auto),
+              ),
+              _ModeButton(
+                selected: value == TunnelMode.tcp,
+                title: 'TCP',
+                subtitle: 'Mais compatibilidade',
+                icon: Icons.swap_horiz_rounded,
+                onTap: () => onChanged(TunnelMode.tcp),
+              ),
+              _ModeButton(
+                selected: value == TunnelMode.udp,
+                title: 'UDP',
+                subtitle: 'Menor latencia',
+                icon: Icons.bolt_rounded,
+                onTap: () => onChanged(TunnelMode.udp),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LogPanel extends StatelessWidget {
+  final List<String> logs;
+
+  const _LogPanel({required this.logs});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.terminal_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Logs da sessao',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 280),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0x88040B16),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFF1F2937)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: logs
+                  .map(
+                    (e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        e,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          color: Color(0xFFD1D5DB),
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FooterHint extends StatelessWidget {
+  final double width;
+
+  const _FooterHint({required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, color: Color(0xFF93C5FD)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              width > 700
+                  ? 'Esta interface ja fica pronta como base visual do seu app. Depois, voce conecta os botoes com a parte real do servidor Python, ADB e VPN no Android.'
+                  : 'A base visual ja esta pronta. Depois e so ligar essa interface ao backend real.',
+              style: const TextStyle(
+                color: Color(0xFFCBD5E1),
+                fontSize: 13.5,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 260,
+      child: _GlassCard(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: const Color(0xFF93C5FD), size: 24),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: Color(0xFF94A3B8),
+                fontSize: 12.8,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ModeButton({
+    required this.selected,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 170,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: selected ? const Color(0xFF172554) : const Color(0xAA0B1220),
+          border: Border.all(
+            color: selected ? const Color(0xFF60A5FA) : const Color(0xFF253042),
+            width: selected ? 1.4 : 1,
+          ),
+          boxShadow: selected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x223B82F6),
+                    blurRadius: 20,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: Color(0xFF94A3B8),
+                fontSize: 12.8,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniInfoTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+
+  const _MiniInfoTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 190,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xAA0B1220),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF253042)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: const Color(0xFF172554),
+            ),
+            child: Icon(icon, color: const Color(0xFFBFDBFE)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF9CA3AF),
+                    fontSize: 12.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _StatusChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.32)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _GlassCard({
+    required this.child,
+    required this.padding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: const Color(0xB3121A27),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF1E293B)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 30,
+            offset: Offset(0, 18),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _BackgroundGlow extends StatelessWidget {
+  const _BackgroundGlow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned(
+          top: -120,
+          left: -90,
+          child: Container(
+            width: 280,
+            height: 280,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [Color(0x553B82F6), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 100,
+          right: -100,
+          child: Container(
+            width: 320,
+            height: 320,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [Color(0x447C3AED), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: -120,
+          left: 60,
+          child: Container(
+            width: 260,
+            height: 260,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [Color(0x2238BDF8), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+'@ | Set-Content .\lib\main.dart -Encoding UTF8
+
+Write-Host "==> Rodando flutter pub get..."
+flutter pub get
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Erro no flutter pub get." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host ""
+Write-Host "Projeto criado com sucesso em: $ProjectPath" -ForegroundColor Green
+Write-Host ""
+Write-Host "Para abrir no Android:" -ForegroundColor Cyan
+Write-Host "cd $ProjectName"
+Write-Host "flutter run"
+Write-Host ""
+Write-Host "Para abrir no Windows:" -ForegroundColor Cyan
+Write-Host "flutter config --enable-windows-desktop"
+Write-Host "flutter run -d windows"
